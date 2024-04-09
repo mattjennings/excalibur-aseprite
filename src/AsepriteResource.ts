@@ -3,6 +3,7 @@ import { AsepriteRawJson } from './AsepriteRawJson';
 import { AsepriteSpriteSheet } from './AsepriteSpriteSheet';
 import { AsepriteNativeParser } from './AsepriteNativeParser';
 import { AsepriteJsonParser } from './AsepriteJsonParser';
+import { ParseOptions } from './AsepriteParseOptions';
 
 
 export class AsepriteResource implements Loadable<AsepriteSpriteSheet> {
@@ -25,14 +26,33 @@ export class AsepriteResource implements Loadable<AsepriteSpriteSheet> {
         }
         return false;
     }
-    constructor(path: string, public bustCache = false) {
+
+    public options: {
+        bustCache: boolean;
+        parseOptions?: ParseOptions;
+    }
+
+    constructor(
+        path: string, 
+        bustCacheOrOptions?:
+            | boolean 
+            | { 
+                bustCache?: boolean
+                parseOptions?: ParseOptions
+              }
+    ) {        
+        this.options = {
+            bustCache: (typeof bustCacheOrOptions === 'boolean' ? bustCacheOrOptions : bustCacheOrOptions?.bustCache) ?? false,
+            parseOptions: typeof bustCacheOrOptions === 'object' ? bustCacheOrOptions.parseOptions : undefined
+        }
+
         this._path = path;
         // if this is a .ase/.aseprite download as an arraybuffer 
         if (this._hasFileExtension(path, 'ase')  || this._hasFileExtension(path, 'aseprite')) {
-            this._nativeResource = new Resource<ArrayBuffer>(path, "arraybuffer", bustCache);
+            this._nativeResource = new Resource<ArrayBuffer>(path, "arraybuffer", this.options.bustCache);
             this._type = 'native';
         } else {
-            this._jsonResource = new Resource(path, 'json', bustCache);
+            this._jsonResource = new Resource(path, 'json', this.options.bustCache);
             this._type = 'json';
         }
 
@@ -56,7 +76,7 @@ export class AsepriteResource implements Loadable<AsepriteSpriteSheet> {
         if (this._type === 'json' && this._jsonResource) {
             const asepriteData = await this._jsonResource.load();
             const imagepath = this.convertPath(this._jsonResource.path, asepriteData.meta.image);
-            const spriteSheetImage = new ImageSource(imagepath, this.bustCache);
+            const spriteSheetImage = new ImageSource(imagepath, this.options.bustCache);
             await spriteSheetImage.load();
 
             this._jsonParser = new AsepriteJsonParser(asepriteData, spriteSheetImage);
@@ -68,7 +88,7 @@ export class AsepriteResource implements Loadable<AsepriteSpriteSheet> {
             const arraybuffer = await this._nativeResource?.load();
 
             if (arraybuffer) {
-                this._nativeParser = new AsepriteNativeParser(arraybuffer);
+                this._nativeParser = new AsepriteNativeParser(arraybuffer, this.options.parseOptions);
     
                 await this._nativeParser.parse();
             } else {
@@ -101,7 +121,7 @@ export class AsepriteResource implements Loadable<AsepriteSpriteSheet> {
     }
 
     public clone() {
-        const clone = new AsepriteResource(this._path, this.bustCache);
+        const clone = new AsepriteResource(this._path, this.options.bustCache);
         clone.data = this.data.clone();
 
         return clone;

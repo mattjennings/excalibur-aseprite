@@ -1,6 +1,7 @@
 import { Animation, AnimationStrategy, Color, Frame, ImageSource, Sprite, SpriteSheet } from "excalibur";
 import { inflate } from 'pako';
 import { AsepriteSpriteSheet } from "./AsepriteSpriteSheet";
+import { ParseOptions } from "./AsepriteParseOptions";
 
 export const AnimationTypes = {
     Forward: 0,
@@ -39,10 +40,14 @@ export class AsepriteNativeParser {
     private _indexedColors = new Map<number, Color>();
     private _currentLayer = 0;
     private _layerData = new Map<number, LayerData>();
+    private _parseOptions: ParseOptions;
     public height: number = 0;
     public width: number = 0;
-    constructor(public arraybuffer: ArrayBuffer) {
+
+
+    constructor(public arraybuffer: ArrayBuffer, options?: ParseOptions) {
         this._dataView = new DataView(arraybuffer);
+        this._parseOptions = options ?? {};
     }
 
     async parse() {
@@ -174,13 +179,20 @@ export class AsepriteNativeParser {
                 const compressed = this._readBytes(sizeToRead);
                 const decompressed = inflate(compressed);
                 const transformed = this._transformImageDataToRGBA(decompressed);
-                const data = new Uint8ClampedArray(transformed);
-                const imageData = new ImageData(data, width, height);
-                const imageBitmap = await createImageBitmap(imageData);
-                ctx.save();
-                ctx.globalAlpha = (opacity/255) * (layerData?.opacity ?? 255)/255;
-                ctx.drawImage(imageBitmap, xPos, yPos);
-                ctx.restore();
+
+                const shouldParse = 
+                    (this._parseOptions.filterLayers?.length ?? 0) === 0 || 
+                    (layerData?.name && this._parseOptions.filterLayers?.includes(layerData?.name));
+
+                if (shouldParse) {                    
+                    const data = new Uint8ClampedArray(transformed);
+                    const imageData = new ImageData(data, width, height);
+                    const imageBitmap = await createImageBitmap(imageData);
+                    ctx.save();
+                    ctx.globalAlpha = (opacity/255) * (layerData?.opacity ?? 255)/255;
+                    ctx.drawImage(imageBitmap, xPos, yPos);
+                    ctx.restore();
+                }
             // Compressed tilemap
             } else if (cellType === 3) {
                 // TODO tilemap support
